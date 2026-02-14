@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-time Sports Prediction + Odds Analytics</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #10131a; color: #f2f5fa; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: #1c2430; border-radius: 12px; padding: 16px; }
+    .row { margin: 8px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input, select, button { padding: 8px; border-radius: 8px; border: 1px solid #2e3e56; background: #0d1117; color: #f2f5fa; }
+    button { cursor: pointer; background: #2d62ff; }
+    pre { background: #0d1117; padding: 12px; border-radius: 8px; overflow-x: auto; max-height: 350px; }
+    .notice { background: #3b2b00; border: 1px solid #7a5a00; padding: 10px; border-radius: 8px; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Real-time Cricket + Football Prediction Dashboard</h1>
+  <div class="notice">
+    Analytics only: this demo shows licensed-feed style odds + model signals and does not process real-money betting.
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Live Stream (Prediction + Market Odds)</h2>
+      <div class="row">
+        <label>Sport:</label>
+        <select id="sport">
+          <option value="football">football</option>
+          <option value="cricket">cricket</option>
+        </select>
+        <label>Match:</label>
+        <select id="matchId">
+          <option value="f001">f001</option>
+          <option value="c001">c001</option>
+        </select>
+        <button id="connectBtn">Connect</button>
+      </div>
+      <pre id="liveOutput">Waiting for stream...</pre>
+    </div>
+
+    <div class="card">
+      <h2>Value Signal</h2>
+      <div class="row"><label>Outcome:</label> <input id="outcome" value="homeWin" /></div>
+      <button id="signalBtn">Compute Signal</button>
+      <pre id="signalOutput">No signal yet.</pre>
+    </div>
+  </div>
+
+  <script>
+    let socket;
+    let latestSport = 'football';
+    let latestMatch = 'f001';
+
+    const toJson = (obj) => JSON.stringify(obj, null, 2);
+
+    function setDefaultMatchForSport(sport) {
+      const matchId = document.getElementById('matchId');
+      matchId.value = sport === 'football' ? 'f001' : 'c001';
+    }
+
+    async function call(url) {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      return data;
+    }
+
+    document.getElementById('sport').addEventListener('change', (e) => {
+      setDefaultMatchForSport(e.target.value);
+    });
+
+    document.getElementById('connectBtn').onclick = () => {
+      if (socket) socket.close();
+      const sport = document.getElementById('sport').value;
+      const matchId = document.getElementById('matchId').value;
+      latestSport = sport;
+      latestMatch = matchId;
+      socket = new WebSocket(`ws://${location.host}/ws/live/${sport}/${matchId}`);
+      socket.onmessage = (event) => {
+        document.getElementById('liveOutput').textContent = toJson(JSON.parse(event.data));
+      };
+      socket.onerror = () => {
+        document.getElementById('liveOutput').textContent = 'WebSocket error. Check server logs.';
+      };
+    };
+
+    document.getElementById('signalBtn').onclick = async () => {
+      const outcome = document.getElementById('outcome').value;
+      try {
+        const data = await call(`/signals/value/${latestSport}/${latestMatch}?outcome=${encodeURIComponent(outcome)}`);
+        document.getElementById('signalOutput').textContent = toJson(data);
+      } catch (e) {
+        document.getElementById('signalOutput').textContent = e.message;
+      }
+    };
+  </script>
+</body>
+</html>
